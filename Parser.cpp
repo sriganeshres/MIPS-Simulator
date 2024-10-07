@@ -1,12 +1,5 @@
 // This File Converts the .asm file to .bin file
 // converts MIPS instruction into 32 bit binary format
-
-
-
-
-
-
-
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -62,7 +55,6 @@ unordered_map<string, unordered_map<string, string>> mips_instructions = {
 
 // Register memory storage
 unordered_map<string, string> register_memory;
-
 
 // Label addresses for branching
 unordered_map<string, int> labelAddressMap;
@@ -157,14 +149,17 @@ void parseDataSection(ifstream &input) {
 void parseTextSection(ifstream &input, ofstream &output) {
     string line;
     int instructionAddress = 0x00400000;  // Starting address for text segment
-
+    bool inText = false;
     // First pass: store labels with their addresses
     while (getline(input, line)) {
-        if (line.find(":") != string::npos) {
+        if(!inText && line.find(".text") != string::npos) {
+            inText = true;
+        }
+        if (inText && line.find(":") != string::npos) {
             size_t pos = line.find(":");
             string label = line.substr(0, pos);
             labelAddressMap[label] = instructionAddress;
-        } else if (!line.empty() && line[0] != '#') {  // Ignore empty lines and comments
+        } else if (inText && !line.empty() && line[0] != '#' && line[0] != '.') {  // Ignore empty lines and comments
             instructionAddress += 4;  // Each instruction is 4 bytes
         }
     }
@@ -249,7 +244,7 @@ void parseTextSection(ifstream &input, ofstream &output) {
                 iss >> rs >> rt >> label;
                 rs=rs.substr(0,rs.size()-1);
                 rt=rt.substr(0,rt.size()-1);
-                int labelOffset = (labelAddressMap[label] - instructionAddress - 4) / 4;
+                int labelOffset = (labelAddressMap[label] - instructionAddress + 4) / 4;
                 output << convertIType(opcode, rs, rt, labelOffset) << endl;
             } else if (opcode == "li") {
                 iss >> rt >> immediate;
