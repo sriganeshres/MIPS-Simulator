@@ -248,6 +248,11 @@ During the execution phase, the simulator successfully replicates the MIPS datap
 
 In summary, the MIPS simulator project not only meets the assignment's requirements but also serves as an invaluable learning tool for understanding MIPS architecture and assembly language programming. The comprehensive approach taken in developing this simulator highlights key concepts in instruction parsing, binary translation, and execution simulation. This implementation sets a solid groundwork for further exploration into advanced features such as handling more complex instruction types, incorporating pipelining, and implementing additional control logic. The experience gained from this project will be instrumental in fostering a deeper appreciation for computer architecture and the intricacies of low-level programming.
 
+### Group Members
+- Sri Ganesh Thota (B22CS054)
+- Trivedi Aditya Bhargavkumar (B22CS055)
+- Jateen (B22CS026)
+
 ### References
 - MIPS Architecture Reference Manual
 - MIPS Instruction Set Overview
