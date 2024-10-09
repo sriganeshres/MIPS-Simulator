@@ -1,13 +1,6 @@
 // This File Converts the .asm file to .bin file
 // converts MIPS instruction into 32 bit binary format
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <unordered_map>
-#include <vector>
-#include <bitset>
-#include <string>
-#include <iomanip>
+#include <bits/stdc++.h>
 
 using namespace std;
 
@@ -27,6 +20,18 @@ unordered_map<string, string> mips_registers = {
     {"$t8", "11000"}, {"$t9", "11001"}, {"$k0", "11010"}, {"$k1", "11011"},
     {"$gp", "11100"}, {"$sp", "11101"}, {"$fp", "11110"}, {"$ra", "11111"}
 };
+
+unordered_map<string, string> reverse_mips_registers = {
+    {"00000", "$zero"}, {"00001", "$at"}, {"00010", "$v0"}, {"00011", "$v1"},
+    {"00100", "$a0"}, {"00101", "$a1"}, {"00110", "$a2"}, {"00111", "$a3"},
+    {"01000", "$t0"}, {"01001", "$t1"}, {"01010", "$t2"}, {"01011", "$t3"},
+    {"01100", "$t4"}, {"01101", "$t5"}, {"01110", "$t6"}, {"01111", "$t7"},
+    {"10000", "$s0"}, {"10001", "$s1"}, {"10010", "$s2"}, {"10011", "$s3"},
+    {"10100", "$s4"}, {"10101", "$s5"}, {"10110", "$s6"}, {"10111", "$s7"},
+    {"11000", "$t8"}, {"11001", "$t9"}, {"11010", "$k0"}, {"11011", "$k1"},
+    {"11100", "$gp"}, {"11101", "$sp"}, {"11110", "$fp"}, {"11111", "$ra"}
+};
+
 
 // MIPS instructions with their types, opcodes, and function codes
 unordered_map<string, unordered_map<string, string>> mips_instructions = {
@@ -53,11 +58,16 @@ unordered_map<string, unordered_map<string, string>> mips_instructions = {
     {"jal",    {{"type", "J"}, {"opcode", "000011"}}}
 };
 
+bool foundMain = false;
+
 // Register memory storage
 unordered_map<string, string> register_memory;
 
 // Label addresses for branching
 unordered_map<string, int> labelAddressMap;
+
+// Instruction Mapping
+unordered_map<int, string> instructionMemory;
 
 // Initialize register memory
 void initializeRegisterMemory() {
@@ -91,12 +101,13 @@ string convertJType(const string &opcode, int address) {
     return mips_instructions[opcode]["opcode"] + getAddressBinary(address);
 }
 
+unordered_map<string, pair<int, vector<int>>> memoryAllocation = {};
+vector<int> atRegister;
 // Store value in register
 void storeInRegister(const string &reg, const string &value) {
     register_memory[mips_registers[reg]] = value;
 }
 // Memory storage for the `.data` section
-unordered_map<string, pair<int, vector<int>>> memoryAllocation;
 int dataMemoryAddress = 0x10010000;  // Starting address for data memory
 unordered_map<int, string> varToRegMap;
 // Parse the `.data` section
@@ -115,33 +126,12 @@ void parseDataSection(ifstream &input) {
             if (directive == ".word") {
                 int value;
                 iss >> value;
-                varToRegMap[dataMemoryAddress]="$s"+to_string(i++);
+                varToRegMap[dataMemoryAddress]="$at";
                 memoryAllocation[label] = {dataMemoryAddress, {value}};
+                atRegister.push_back(value);
                 dataMemoryAddress += 4;
-            } else if (directive == ".float") {
-                float value;
-                iss >> value;
-                int intValue = *reinterpret_cast<int*>(&value);
-                memoryAllocation[label] = {dataMemoryAddress, {intValue}};
-                dataMemoryAddress += 4;
-            } else if (directive == ".asciiz") {
-                string str;
-                getline(iss, str);
-                str = str.substr(1, str.size() - 2);  // Remove quotation marks
-                vector<int> charValues;
-                for (char c : str) {
-                    charValues.push_back(static_cast<int>(c));
-                }
-                charValues.push_back(0);  // Null terminator
-                memoryAllocation[label] = {dataMemoryAddress, charValues};
-                dataMemoryAddress += ((charValues.size() + 3) / 4) * 4;  // Align to word boundary
             }
         }
-    }
-
-    // Store data addresses in $1 register
-    for (const auto& entry : memoryAllocation) {
-        storeInRegister("$1", bitset<32>(entry.second.first).to_string());
     }
 }
 
@@ -159,7 +149,10 @@ void parseTextSection(ifstream &input, ofstream &output) {
             size_t pos = line.find(":");
             string label = line.substr(0, pos);
             labelAddressMap[label] = instructionAddress;
-        } else if (inText && !line.empty() && line[0] != '#' && line[0] != '.') {  // Ignore empty lines and comments
+            if(label == "main") {
+                foundMain = true;
+            }
+        } else if (inText && !line.empty() && line[0] != '#' && line[0] != '.' && line[0] != '\n') {  // Ignore empty lines and comments
             instructionAddress += 4;  // Each instruction is 4 bytes
         }
     }
@@ -193,81 +186,42 @@ void parseTextSection(ifstream &input, ofstream &output) {
                 iss >> rd >> rs;
                 rd=rd.substr(0,rd.size()-1);
                 output << convertRType("add", rs, "$zero", rd) << endl;
-                storeInRegister(rd, register_memory[mips_registers[rs]]);
             } else if (opcode == "sll" || opcode == "srl") {
                 iss >> rd >> rt >> shamt;
                 output << convertRType(opcode, "$zero", rt, rd, shamt) << endl;
-                int value = stoi(register_memory[mips_registers[rt]], nullptr, 2);
-                value = (opcode == "sll") ? (value << shamt) : (value >> shamt);
-                storeInRegister(rd, bitset<32>(value).to_string());
             } else {
                 iss >> rd >> rs >> rt;
                 rs=rs.substr(0,rs.size()-1);
                 rd=rd.substr(0,rd.size()-1);
-                cout<< opcode << " " << rd << " " << rs<< " " << rt <<endl;
                 output << convertRType(opcode, rs, rt, rd) << endl;
                 // Perform operation and store result
-                int value1 = stoi(register_memory[mips_registers[rs]], nullptr, 2);
-                int value2 = stoi(register_memory[mips_registers[rt]], nullptr, 2);
-                int result;
-                if (opcode == "add") result = value1 + value2;
-                else if (opcode == "sub") result = value1 - value2;
-                else if (opcode == "and") result = value1 & value2;
-                else if (opcode == "or") result = value1 | value2;
-                else if (opcode == "slt") result = (value1 < value2) ? 1 : 0;
-                storeInRegister(rd, bitset<32>(result).to_string());
             }
         } else if (mips_instructions[opcode]["type"] == "I") {
             if (opcode == "lw") {
                 iss >> rt >> label;
                 rt=rt.substr(0,rt.size()-1);
                 // Assume address of label is in $1
-                if (label.find('(') == std::string::npos) {
-                    storeInRegister(rt,bitset<32>(memoryAllocation[label].second[0]).to_string());
-                    output << convertIType(opcode, varToRegMap[memoryAllocation[label].first], rt, 0) << endl;
-                } else if (isdigit(label[0])) {
-                    size_t openParen = label.find('(');
-                    size_t closeParen = label.find(')');
-                    if (openParen != std::string::npos && closeParen != std::string::npos) {
-                        string offset = label.substr(0, openParen);
-                        string base = label.substr(openParen + 1, closeParen - openParen - 1);
-                        output << convertIType(opcode, base, rt, stoi(offset)) << endl;
-                    }
-                }
-                
-                // // Load word from memory to register
-                // int address = stoi(register_memory[mips_registers["$1"]], nullptr, 2);
-                // int value = memoryAllocation[label].second[0];
-                // storeInRegister(rt, bitset<32>(value).to_string());
-             
+                output << convertIType(opcode, varToRegMap[memoryAllocation[label].first], rt, memoryAllocation[label].first - 0x10010000) << endl; 
             } else if (opcode == "beq" || opcode == "bne") {
                 iss >> rs >> rt >> label;
                 rs=rs.substr(0,rs.size()-1);
                 rt=rt.substr(0,rt.size()-1);
-                int labelOffset = (labelAddressMap[label] - instructionAddress + 4) / 4;
+                int labelOffset = (labelAddressMap[label] - instructionAddress) / 4;
+                if (foundMain) labelOffset += 1;
                 output << convertIType(opcode, rs, rt, labelOffset) << endl;
             } else if (opcode == "li") {
                 iss >> rt >> immediate;
+                rt=rt.substr(0,rt.size()-1);
                 output << convertIType("addi", "$zero", rt, immediate) << endl;
-                storeInRegister(rt, bitset<32>(immediate).to_string());
-            } else if (opcode == "la") {
-                iss >> rt >> label;
-                int address = memoryAllocation[label].first;
-                output << convertIType("addi", "$zero", rt, address) << endl;
-                storeInRegister(rt, bitset<32>(address).to_string());
             } else {
                 iss >> rt >> rs >> immediate;
+                rs=rs.substr(0,rs.size()-1);
+                rt=rt.substr(0,rt.size()-1);
                 output << convertIType(opcode, rs, rt, immediate) << endl;
-                int value = stoi(register_memory[mips_registers[rs]], nullptr, 2);
-                int result;
-                if (opcode == "addi") result = value + immediate;
-                else if (opcode == "andi") result = value & immediate;
-                else if (opcode == "ori") result = value | immediate;
-                storeInRegister(rt, bitset<32>(result).to_string());
             }
         } else if (mips_instructions[opcode]["type"] == "J") {
             iss >> label;
-            int address = labelAddressMap[label] / 4;
+            int address = labelAddressMap[label];
             output << convertJType(opcode, address) << endl;
         }
         
@@ -275,8 +229,147 @@ void parseTextSection(ifstream &input, ofstream &output) {
     }
 }
 
-int main() {
-    ifstream inputFile("input.asm");
+void executeRType(const string &instruction, int& PC) {
+    string rs = instruction.substr(6, 5);
+    string rt = instruction.substr(11, 5);
+    string rd = instruction.substr(16, 5);
+    string shamt = instruction.substr(21, 5);
+    string funct = instruction.substr(26, 6);
+
+    int value1 = stoi(register_memory[rs], nullptr, 2);
+    int value2 = stoi(register_memory[rt], nullptr, 2);
+    int result = 0;
+    if (funct == "100000") {  // add
+        result = value1 + value2;
+    } else if (funct == "100010") {  // sub
+        result = value1 - value2;
+    } else if (funct == "100100") {  // and
+        result = value1 & value2;
+    } else if (funct == "100101") {  // or
+        result = value1 | value2;
+    } else if (funct == "101010") {  // slt
+        result = (value1 < value2) ? 1 : 0;
+    } else if (funct == "000000" || funct == "000010") {  // sll/srl
+        int shamtVal = stoi(shamt, nullptr, 2);
+        result = (funct == "000000") ? (value2 << shamtVal) : (value2 >> shamtVal);
+    }
+
+    storeInRegister(reverse_mips_registers[rd], bitset<32>(result).to_string());
+    PC += 4;  // Always increment PC for R-type instructions
+}
+
+void executeIType(const string &instruction, int& PC) {
+    string opcode = instruction.substr(0, 6);
+    string rs = instruction.substr(6, 5);
+    string rt = instruction.substr(11, 5);
+    int immediate = stoi(instruction.substr(16, 16), nullptr, 2);
+    int value = stoi(register_memory[rs], nullptr, 2);
+    int result = 0;
+
+    if (opcode == "001000") {  // addi
+        result = value + immediate;
+        storeInRegister(reverse_mips_registers[rt], bitset<32>(result).to_string());
+        PC += 4;
+    } else if (opcode == "001100") {  // andi
+        result = value & immediate;
+        storeInRegister(reverse_mips_registers[rt], bitset<32>(result).to_string());
+        PC += 4;
+    } else if (opcode == "001101") {  // ori
+        result = value | immediate;
+        storeInRegister(reverse_mips_registers[rt], bitset<32>(result).to_string());
+        PC += 4;
+    } else if (opcode == "000101") {  // bne
+        int val = stoi(register_memory[rt], nullptr, 2);
+        if (value != val) {
+            PC += immediate * 4;
+        } else {
+            PC += 4;
+        }
+    } else if (opcode == "000100") {  // beq
+        int val = stoi(register_memory[rt], nullptr, 2);
+        if (value == val) {
+            PC += immediate * 4;
+        } else {
+            PC += 4;
+        }
+    } else if (opcode == "100011") { // lw
+        result = atRegister[immediate / 4];
+        storeInRegister(reverse_mips_registers[rt], bitset<32>(result).to_string());
+        PC += 4;
+    }
+}
+
+void executeJType(const string &instruction, int& PC) {
+    string opcode = instruction.substr(0, 6);
+    int address = stoi(instruction.substr(6, 26), nullptr, 2);
+    if (opcode == "000010") {  // j
+        PC = address;
+    } else if (opcode == "000011") {  // jal
+        storeInRegister("$ra", bitset<32>(PC + 4).to_string());  // Save return address
+        PC = address;
+    }
+}
+
+void processInstruction(const string& line, int& PC) {
+    if (line.length() != 32) {
+        cerr << "Invalid line" << endl;
+        return;
+    }
+    string subStr = line.substr(0, 6);
+    storeInRegister("$at", bitset<32>(0x10010000).to_string());
+    if (subStr == "000000") {
+        executeRType(line, PC);
+    } else if (subStr == "000010" || subStr == "000011") {
+        executeJType(line, PC);
+    } else {
+        executeIType(line, PC);
+    }
+}
+
+void Processor(const string& binaryFile) {
+    ifstream binaryReadFile(binaryFile);
+
+    if (!binaryReadFile.is_open()) {
+        cerr << "Error opening file!" << endl;
+        return;
+    }
+
+    string line;
+    int PC = 0x00400000;
+    while (getline(binaryReadFile, line)) {
+        if (line.length() != 32) {
+            cerr << "Invalid instruction length" << endl;
+            continue;
+        }
+        instructionMemory[PC] = line;
+        PC += 4;
+    }
+    PC = 0x00400000;
+    binaryReadFile.close();
+
+    while(instructionMemory.find(PC) != instructionMemory.end()) {
+        string currentInstruction = instructionMemory[PC];
+        processInstruction(currentInstruction, PC);
+    }
+
+    vector<pair<string, string>> registerVals;
+    for (const auto& ele : register_memory) {
+        registerVals.push_back({ele.first, ele.second});
+    }
+    sort(registerVals.begin(), registerVals.end(), [&](const pair<string, string> &a, const pair<string, string> &b) {
+        return a.first < b.first;
+    });
+    for(const auto& ele: registerVals) {
+        cout << ele.first << " " << ele.second << endl;
+    }
+}
+
+int main(int argc, char** argv) {
+    if(argc < 2) {
+        cerr << "Usage: ./Parser <input_file>.asm";
+        return 1;
+    }
+    ifstream inputFile(argv[1]);
     ofstream outputFile("output.bin");
 
     if (!inputFile.is_open() || !outputFile.is_open()) {
@@ -286,6 +379,7 @@ int main() {
 
     initializeRegisterMemory();
     parseDataSection(inputFile);
+    cout << "Output is in output.bin file" << endl;
 
     // Reset file pointer to beginning of file
     inputFile.clear();
@@ -308,6 +402,13 @@ int main() {
     cout << "\nText Section Labels:" << endl;
     for (const auto &entry : labelAddressMap) {
         cout << entry.first << ": 0x" << hex << entry.second << endl;
+    }
+
+    string wantToExecute;
+    cout << "Want to execute\nTo execute type yes\n";
+    cin >> wantToExecute;
+    if(wantToExecute == "yes") {
+        Processor("output.bin");
     }
 
     return 0;
