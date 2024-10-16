@@ -248,10 +248,24 @@ During the execution phase, the simulator successfully replicates the MIPS datap
 
 In summary, the MIPS simulator project not only meets the assignment's requirements but also serves as an invaluable learning tool for understanding MIPS architecture and assembly language programming. The comprehensive approach taken in developing this simulator highlights key concepts in instruction parsing, binary translation, and execution simulation. This implementation sets a solid groundwork for further exploration into advanced features such as handling more complex instruction types, incorporating pipelining, and implementing additional control logic. The experience gained from this project will be instrumental in fostering a deeper appreciation for computer architecture and the intricacies of low-level programming.
 
+### Description Of Test Files
+- Test3.asm
+    1. It decribes a for loop upto 5
+    2. $ti has the upper limit and while iterating $t0 will be increased till $t1.
+    3. when loop ens t2 will be increased by 16.
+    3. in output we get $t1 = $t0 = 5 and $t2 = 16
+- Test4.asm
+    1. First we declare 3 varaiables to 25, 47, 35.
+    2. Then we load them in t0,t1,t2
+    3. we check whether t0 is greater than t1 and if yes then we check that with t2 or else we check t1 with t2 and max value will be stored in t5.
+    4. output is t0 = 25, t1 = 47, t2 = 35, t3 = 1, t4 = 47, t5 = 47.
+- Test5.asm
+    1. This code to test the branching and jump instructions wheter they are working properly or not.
+    2. output will be t0 = 5, t1 = 10, t2 = 20, t3 = 5.
+
 ### Group Members
 - Sri Ganesh Thota (B22CS054)
 - Trivedi Aditya Bhargavkumar (B22CS055)
-- Jateen (B22CS026)
 
 ### References
 - MIPS Architecture Reference Manual

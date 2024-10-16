@@ -2,7 +2,6 @@
     num1: .word 25
     num2: .word 47
     num3: .word 35
-    max_value: .word 0                # To store the maximum value
 
 .text
     lw $t0, num1                      # Load num1 into $t0
